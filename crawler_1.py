@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# -*- coding: utf-8 -*- 
 
 import httplib
 import sys
@@ -8,19 +9,20 @@ import csv
 from HTMLParser import HTMLParser
 
 
-class miniHTMLParser( HTMLParser ):
+class miniHTMLParser(HTMLParser):
 
     viewedQueue = []
     instQueue = []
     tutorQueue = []
+    linkNumber = 0
 
-    def get_next_link( self ):
+    def get_next_link(self):
         if self.instQueue == []:
             return ''
         else:
             return self.instQueue.pop(0)
 
-    def gethtmlfile( self, site, page ):
+    def gethtmlfile(self, site, page):
         try:
             httpconn = httplib.HTTPConnection(site)
             httpconn.request("GET", page)
@@ -31,21 +33,96 @@ class miniHTMLParser( HTMLParser ):
 
         return resppage
 
-    def handle_starttag( self, tag, attrs ):
+    def handle_starttag(self, tag, attrs):
         if tag == 'a':
             newstr = str(attrs[0][1])
             if re.search('http', newstr) == None:
-                if re.search('mailto', newstr) == None:
-                    if ( (newstr in self.tutorQueue) == False ) and ( re.search('matematik-', newstr) != None ):
-                        self.tutorQueue.append( newstr )
-                        print "    adding tutor count: ",str(len(self.tutorQueue)), newstr
-                    elif (newstr in self.viewedQueue) == False:
-                        self.instQueue.append( newstr )
-                        self.viewedQueue.append( newstr )
+                if re.match('//', newstr) == None:
+                        if re.search('mailto', newstr) == None:
+                            # if ((newstr in self.tutorQueue) == False) and (re.search('matematik-', newstr) != None):
+                            if ((newstr in self.tutorQueue) == False) and (newstr[1:2].isdigit() == True):
+                                self.tutorQueue.append(newstr)
+                                print "    adding tutor count: ", str(len(self.tutorQueue)), newstr
+                                self.parseTutor(newstr)
+                            elif (newstr in self.viewedQueue) == False:
+                                self.instQueue.append(newstr)
+                                self.viewedQueue.append(newstr)
+                        else:
+                            print "    ignoring", newstr
                 else:
                     print "    ignoring", newstr
             else:
                 print "    ignoring", newstr
+
+    def parseTutor(self, url):
+        print "*******************************************************************************"
+        #analis
+        name = '-'
+        email = '-'
+        phone = '-'
+        city = '-'
+        regions = '-'
+        country = '-'
+        subject = '-'
+        urlPhoto = '-'
+
+        tut = "http://" + sys.argv[1] + url
+        self.linkNumber = self.linkNumber + 1
+        print str(self.linkNumber) + "  url: " + tut
+        infile = urllib.urlopen(tut)
+        lines = infile.readlines()
+        for i in range(len(lines)):
+            line = lines[i] 
+            if 'Ad/Soyad' in line:
+                without_space = lines[i+3].strip()
+                name = without_space[0:-5].strip()
+                print " name    : " + name
+
+            if 'E-mail' in line:
+                without_space = lines[i+3].strip()
+                email = without_space[21:-20].strip()
+                print " email   : " + email
+
+            if 'Telefon' in line:
+                without_space = lines[i+3].strip()
+                phone = without_space[0:-5].strip()
+                # phone  = re.sub(' ', '', phone)
+                # phone  = re.sub('-', '', phone)
+                # if phone[0] == '0':
+                #     phone = phone[1:]
+                # if phone[0] == '5' and len(phone) >= 10:
+                #     phone = phone[:10]
+                # else:
+                #     phone = '-'
+                print " phone   : " + phone
+                
+            if 'Ders verilebilece' in line:
+                without_space = lines[i+3].strip()
+                location = without_space[0:-5].strip()
+                pos = location.rfind(",")
+                if pos >= 0:
+                    city = location[pos+1:].capitalize()
+                    regions = location[0:pos].lower()
+                print " city    : " + city
+                print " regions : " + regions
+
+                country = "Turkey"
+                print " country : " + country                
+
+                subject = "Mathematics"
+                print " subject : " + subject
+
+            if 'retmen bilgiler' in line:
+                without_space = lines[i+6].strip()
+                urlPhoto = without_space[10:-5].strip()
+                urlPhoto = urlPhoto[0:-2].strip()
+                if 'nophoto' in urlPhoto:
+                    urlPhoto = '-'
+                print " urlPhoto: " + urlPhoto
+        #Write to file
+        print "*******************************************************************************"
+        writer.writerow({'full-name': name, 'email': email, 'phone-number': phone, 'city': city, 'regions': regions, 'country': country, 'subject': subject, 'url-of-profile': tut, 'url-of-photo': urlPhoto})
+
 
 def main():
 
@@ -56,73 +133,29 @@ def main():
     mySpider = miniHTMLParser()
 
     link = "/"
+    exceptionCount = 0
+    global csvfile
+    csvfile = open('tutors.csv', 'w')
+    fieldnames = ['full-name', 'email', 'phone-number', 'city', 'regions', 'country', 'subject', 'url-of-profile', 'url-of-photo']
+    global writer
+    writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
+    writer.writeheader()
     while link != '':
-        if len(mySpider.tutorQueue) >= 20:
-            print "count ref = " + str(len(mySpider.tutorQueue))
-            break
+        # if len(mySpider.tutorQueue) >= 20:
+        #     print "count ref = " + str(len(mySpider.tutorQueue))
+        #     break
 
-        print "\nChecking link out ", link 
+        print "Checking link out ", link 
 
-        retfile = mySpider.gethtmlfile( sys.argv[1], link )
-        mySpider.feed(retfile)
+        try:
+            retfile = mySpider.gethtmlfile(sys.argv[1], link)
+            mySpider.feed(retfile)
+        except UnicodeDecodeError:
+            exceptionCount = exceptionCount + 1
+            print "!!!!!!!!!!!!!!!!!!!!!! exception in link " + str(exceptionCount) + " " + link
         link = mySpider.get_next_link()
 
-    print "*******************************************************************************"
-    with open('tutors.csv', 'w') as csvfile:
-        fieldnames = ['full-name', 'email', 'phone-number', 'city', 'country', 'subject', 'url-of-profile', 'url-of-photo']
-        writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
-        writer.writeheader()
-
-        name = ''
-        email = ''
-        phone = ''
-        city = ''
-        country = ''
-        subject = ''
-        urlPhoto = ''
-
-        for tut in mySpider.tutorQueue:
-            #analis
-            print "url: " + tut
-            infile = urllib.urlopen("http://" + sys.argv[1] + tut)
-            lines = infile.readlines()
-            for i in range(len(lines)):
-                line = lines[i] 
-                if 'Ad/Soyad' in line:
-                    without_space = lines[i+3].strip()
-                    name = without_space[0:-5].strip()
-                    print " name    : " + name
-
-                if 'E-mail' in line:
-                    without_space = lines[i+3].strip()
-                    email = without_space[21:-20].strip()
-                    print " email   : " + email
-
-                if 'Telefon' in line:
-                    without_space = lines[i+3].strip()
-                    phone = without_space[0:-5].strip()
-                    print " phone   : " + phone
-                    
-                if 'Ders verilebilece' in line:
-                    without_space = lines[i+3].strip()
-                    city = without_space[0:-5].strip()
-                    print " city    : " + city
-
-                    country = "Turkey"
-                    print " country : " + country                
-
-                    subject = "Mathematics"
-                    print " subject : " + subject
-
-                if 'retmen bilgiler' in line:
-                    without_space = lines[i+6].strip()
-                    urlPhoto = without_space[10:-5].strip()
-                    urlPhoto = urlPhoto[0:-2].strip()
-                    print " urlPhoto: " + urlPhoto
-            #Write to file
-            print ""
-            writer.writerow({'full-name': name, 'email': email, 'phone-number': phone, 'city': city, 'country': country, 'subject': subject, 'url-of-profile': tut, 'url-of-photo': urlPhoto})
-
+    csvfile.close()
     mySpider.close()
 
     print "\ndone\n"
