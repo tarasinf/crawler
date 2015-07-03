@@ -42,6 +42,7 @@ class miniHTMLParser(HTMLParser):
                             # if ((newstr in self.tutorQueue) == False) and (re.search('matematik-', newstr) != None):
                             if ((newstr in self.tutorQueue) == False) and (newstr[1:2].isdigit() == True):
                                 self.tutorQueue.append(newstr)
+                                self.viewedQueue.append(newstr)
                                 print "    adding tutor count: ", str(len(self.tutorQueue)), newstr
                                 self.parseTutor(newstr)
                             elif (newstr in self.viewedQueue) == False:
@@ -85,9 +86,18 @@ class miniHTMLParser(HTMLParser):
 
             if 'Telefon' in line:
                 without_space = lines[i+3].strip()
-                phone = without_space[0:-5].strip()
-                # phone  = re.sub(' ', '', phone)
-                # phone  = re.sub('-', '', phone)
+                phone_dirty = without_space[0:-5].strip()
+
+                phone = ''
+                for c in phone_dirty:
+                	if c in ('0','1','2','3','4','5','6','7','8','9'):
+                		phone = phone + c
+                fivePos = phone.find('5')
+                if fivePos >= 0:
+                	phone = phone[fivePos:fivePos + 10]
+                if len(phone) != 10:
+                	phone = '-'
+
                 # if phone[0] == '0':
                 #     phone = phone[1:]
                 # if phone[0] == '5' and len(phone) >= 10:
@@ -141,7 +151,7 @@ def main():
     writer = csv.DictWriter(csvfile, fieldnames = fieldnames)
     writer.writeheader()
     while link != '':
-        # if len(mySpider.tutorQueue) >= 20:
+        # if len(mySpider.tutorQueue) >= 200:
         #     print "count ref = " + str(len(mySpider.tutorQueue))
         #     break
 
@@ -159,6 +169,7 @@ def main():
     mySpider.close()
 
     print "\ndone\n"
+    print "exceptionCount: " + str(exceptionCount)
 
 if __name__ == "__main__":
     main()
